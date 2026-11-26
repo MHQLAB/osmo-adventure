@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1d2b53">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="مغامرة البرمجة">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>مغامرة البرمجة — اختبار الكاميرا والمعايرة</title>
+</head>
+<body>
+  <header class="top">
+    <h1>اختبار الكاميرا والمعايرة</h1>
+    <span id="status" class="chip">لم تبدأ</span>
+    <button id="btnDiag" class="ghost" aria-pressed="false">التشخيص</button>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main class="layout">
+    <section class="panel" id="panelCamera">
+      <h2>١. الكاميرا</h2>
+      <div class="row">
+        <select id="cameraSelect" aria-label="اختيار الكاميرا"><option value="">الكاميرا الأمامية (افتراضي)</option></select>
+        <button id="btnStart" class="primary">تشغيل الكاميرا</button>
+        <button id="btnStop" class="ghost" disabled>إيقاف</button>
+      </div>
+      <p id="support" class="muted small"></p>
+      <video id="video" playsinline muted autoplay></video>
+    </section>
+
+    <section class="panel" id="panelCorrect">
+      <h2>٢. تصحيح الاتجاه وتحديد منطقة اللعب</h2>
+      <p class="muted small">ضع قطعة «المشي» أمام الآيباد وسهمها يشير بعيدًا عنه. عدّل الدوران والانعكاس حتى يظهر السهم متجهًا للأعلى. ثم اسحب النقاط الأربع إلى زوايا منطقة اللعب.</p>
+      <div class="row">
+        <button id="btnRotate" class="tool">تدوير ٩٠°</button>
+        <button id="btnFlipH" class="tool">عكس أفقي</button>
+        <button id="btnFlipV" class="tool">عكس رأسي</button>
+        <button id="btnResetCorners" class="tool">زوايا افتراضية</button>
+      </div>
+      <div class="stage">
+        <canvas id="corrected"></canvas>
+        <canvas id="overlay"></canvas>
+      </div>
+      <p id="transformInfo" class="muted small mono"></p>
+    </section>
+
+    <section class="panel" id="panelRect">
+      <h2>٣. منطقة اللعب بعد تقويم المنظور</h2>
+      <canvas id="rectified"></canvas>
+      <ul id="quality" class="checks"></ul>
+      <div class="row">
+        <button id="btnSave" class="primary" disabled>حفظ المعايرة</button>
+        <button id="btnDeleteCal" class="ghost">حذف معايرة هذا الاتجاه</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panelDiag" hidden>
+      <h2>التشخيص</h2>
+      <dl id="diag" class="diag mono"></dl>
+      <div class="row">
+        <button id="btnReport" class="tool">نسخ تقرير الاختبار</button>
+        <button id="btnSnapshot" class="tool">حفظ لقطة (بإذن)</button>
+      </div>
+      <textarea id="reportOut" class="mono" rows="8" readonly hidden></textarea>
+    </section>
+  </main>
+
+  <dialog id="consent">
+    <form method="dialog">
+      <p>سيتم حفظ صورة واحدة لمنطقة اللعب على هذا الجهاز فقط لاستخدامها في تطوير التعرف على القطع. لا تُرسل إلى أي مكان. هل توافق؟</p>
+      <div class="row">
+        <button value="yes" class="primary">موافق</button>
+        <button value="no" class="ghost">إلغاء</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
