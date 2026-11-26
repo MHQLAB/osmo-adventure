@@ -6,7 +6,7 @@ const CACHE = 'osmo-adventure-' + VERSION;
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './src/app.js', './src/vision/geometry.js', './src/vision/rectify.js', './src/vision/quality.js',
-  './src/vision/adaptive.js', './src/calibration/store.js', './src/platform/storage.js', './src/platform/orientation.js', './src/platform/camera.js',
+  './src/vision/adaptive.js', './src/calibration/store.js', './src/platform/storage.js', './src/content/pieces.js', './src/platform/orientation.js', './src/platform/camera.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
 ];
 
