@@ -1,9 +1,12 @@
 // عامل الخدمة: تخزين ملفات التطبيق للعمل دون إنترنت. لا يخزن أي صور من الكاميرا.
-const CACHE = 'osmo-adventure-v0.1.0';
+// يُختم VERSION تلقائيًا عند النشر (tools/build-site.js). تغيّره يستبدل ملفات المخزن فقط،
+// ولا يمس localStorage/IndexedDB حيث التقدم والمعايرة.
+const VERSION = 'dev';
+const CACHE = 'osmo-adventure-' + VERSION;
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './src/app.js', './src/vision/geometry.js', './src/vision/rectify.js', './src/vision/quality.js',
-  './src/vision/adaptive.js', './src/calibration/store.js', './src/platform/orientation.js', './src/platform/camera.js',
+  './src/vision/adaptive.js', './src/calibration/store.js', './src/platform/storage.js', './src/platform/orientation.js', './src/platform/camera.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
 ];
 

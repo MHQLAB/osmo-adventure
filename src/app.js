@@ -7,8 +7,9 @@ import { AdaptiveScheduler } from './vision/adaptive.js';
 import { CalibrationStore, makeDeviceKey, isCompatible, CALIBRATION_VERSION } from './calibration/store.js';
 import { getOrientation, onOrientationChange } from './platform/orientation.js';
 import { cameraSupport, listCameras, openCamera, trackInfo, stopStream } from './platform/camera.js';
+import { exportSettings, importSettings, requestPersistence } from './platform/storage.js';
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = 'dev'; // يُختم عند النشر
 const WORK_SIDE = 640; // أطول ضلع للصورة المصححة المستخدمة في المعالجة
 const DEFAULT_CORNERS = [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]];
 
@@ -66,6 +67,20 @@ function init() {
     const show = el.panelDiag.hidden; el.panelDiag.hidden = !show; el.btnDiag.setAttribute('aria-pressed', String(show));
   };
   el.btnReport.onclick = copyReport;
+  $('btnExport').onclick = async () => {
+    const text = exportSettings(localStorage);
+    el.reportOut.hidden = false; el.reportOut.readOnly = true; el.reportOut.value = text;
+    try { await navigator.clipboard.writeText(text); $('btnExport').textContent = 'نُسخت ✓'; } catch { el.reportOut.select(); }
+  };
+  $('btnImport').onclick = () => {
+    if (el.reportOut.hidden || el.reportOut.readOnly) {
+      el.reportOut.hidden = false; el.reportOut.readOnly = false; el.reportOut.value = '';
+      el.reportOut.placeholder = 'الصق النسخة الاحتياطية هنا ثم اضغط «استيراد» مرة أخرى';
+      el.reportOut.focus(); return;
+    }
+    try { const n = importSettings(localStorage, el.reportOut.value); $('btnImport').textContent = `استُورد ${n} ✓`; loadCalibrationForOrientation(false); }
+    catch (e) { $('btnImport').textContent = 'نسخة غير صالحة'; }
+  };
   el.btnSnapshot.onclick = () => el.consent.showModal();
   el.consent.addEventListener('close', () => { if (el.consent.returnValue === 'yes') saveSnapshot(); });
   setupPointer();
@@ -74,6 +89,7 @@ function init() {
   window.addEventListener('pagehide', () => stopCamera(''));
   el.video.addEventListener('resize', onVideoResize);
   registerServiceWorker();
+  requestPersistence();
 }
 
 // ---------- الكاميرا ----------
@@ -378,7 +394,7 @@ function renderDiag() {
   if (el.panelDiag.hidden) return;
   const d = diagData();
   const rows = {
-    'FPS عرض': d.renderFps, 'FPS معالجة': d.processFps, 'زمن المعالجة (ms)': d.processMs,
+    'الإصدار': d.appVersion, 'FPS عرض': d.renderFps, 'FPS معالجة': d.processFps, 'زمن المعالجة (ms)': d.processMs,
     'فاصل المعالجة (ms)': d.processIntervalMs, 'مستوى الجودة': d.qualityLevel, 'الفيديو': d.video,
     'المخرج': d.rectified, 'الاتجاه': d.orientation, 'الكاميرا': d.camera, 'مثبت': d.standalone,
     'الحركة': d.motion, 'ثابت': d.stable, 'الأوامر مسموحة': d.commandsAllowed,

@@ -1,3 +1,26 @@
+# أدوات
 node_modules
-docs/smoke/
+_site/
 .DS_Store
+
+# مخرجات الاختبار المحلية
+docs/smoke/
+
+# بيانات حساسة — لا تُرفع أبدًا
+samples/
+captures/
+dataset/
+training/
+osmo-sample-*
+*.heic
+*.HEIC
+*.jpg
+*.jpeg
+*.mov
+*.mp4
+reports/
+*.report.json
+.env
+.env.*
+*.pem
+*.key
