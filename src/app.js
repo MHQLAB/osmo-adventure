@@ -72,6 +72,20 @@ function init() {
     el.reportOut.hidden = false; el.reportOut.readOnly = true; el.reportOut.value = text;
     try { await navigator.clipboard.writeText(text); $('btnExport').textContent = 'نُسخت ✓'; } catch { el.reportOut.select(); }
   };
+  $('btnExportFile').onclick = () => {
+    const blob = new Blob([exportSettings(localStorage)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `osmo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
+  $('importFile').onchange = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    try { const n = importSettings(localStorage, await f.text()); showBanner(`استُعيدت ${n} من الإعدادات والتقدم.`); loadCalibrationForOrientation(false); }
+    catch { showBanner('الملف ليس نسخة احتياطية صالحة لهذا التطبيق.'); }
+    e.target.value = '';
+  };
   $('btnImport').onclick = () => {
     if (el.reportOut.hidden || el.reportOut.readOnly) {
       el.reportOut.hidden = false; el.reportOut.readOnly = false; el.reportOut.value = '';

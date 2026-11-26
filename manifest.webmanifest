@@ -3,6 +3,7 @@
   "short_name": "مغامرة البرمجة",
   "lang": "ar",
   "dir": "rtl",
+  "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

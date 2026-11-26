@@ -1,5 +1,8 @@
 // تخزين محلي آمن عبر التحديثات: كل مفاتيح التطبيق تبدأ بـ "osmo." ولا تُحذف عند تحديث الإصدار.
 // قاعدة: أي تغيير في صيغة البيانات يتطلب ترحيلًا (migration)، لا حذفًا.
+// التخزين مرتبط بالنطاق (origin): عند الانتقال من GitHub Pages إلى osmo.mohammedhq.com
+// تبدأ البيانات فارغة، والنسخة الاحتياطية هي وسيلة النقل. لذلك يجب أن يُحفظ تقدم الطفل
+// مستقبلًا بمفاتيح osmo.* أيضًا (أو يُضاف إلى exportSettings إن نُقل إلى IndexedDB).
 
 export const PREFIX = 'osmo.';
 export const BACKUP_FORMAT = 'osmo-backup-v1';
@@ -11,7 +14,7 @@ export function exportSettings(storage) {
     const k = storage.key(i);
     if (k && k.startsWith(PREFIX)) data[k] = storage.getItem(k);
   }
-  return JSON.stringify({ format: BACKUP_FORMAT, exportedAt: new Date().toISOString(), data });
+  return JSON.stringify({ format: BACKUP_FORMAT, exportedAt: new Date().toISOString(), origin: globalThis.location?.origin ?? null, data }, null, 1);
 }
 
 /** يستورد نسخة احتياطية؛ يقبل مفاتيح التطبيق فقط. يعيد عدد المفاتيح المستوردة. */

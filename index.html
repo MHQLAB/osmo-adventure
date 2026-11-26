@@ -66,8 +66,10 @@
       <div class="row">
         <button id="btnReport" class="tool">نسخ تقرير الاختبار</button>
         <button id="btnSnapshot" class="tool">حفظ لقطة (بإذن)</button>
-        <button id="btnExport" class="tool">نسخة احتياطية للإعدادات</button>
-        <button id="btnImport" class="tool">استيراد</button>
+        <button id="btnExport" class="tool">نسخ الإعدادات كنص</button>
+        <button id="btnImport" class="tool">لصق إعدادات</button>
+        <button id="btnExportFile" class="tool">حفظ ملف نسخة احتياطية</button>
+        <label class="tool filebtn">فتح ملف نسخة احتياطية<input id="importFile" type="file" accept=".json,application/json" hidden></label>
       </div>
       <textarea id="reportOut" class="mono" rows="8" readonly hidden></textarea>
     </section>
