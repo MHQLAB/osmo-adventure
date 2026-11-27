@@ -35,8 +35,12 @@
     </section>
 
     <section class="panel" id="panelCorrect">
-      <h2>٢. تصحيح الاتجاه وتحديد منطقة اللعب</h2>
-      <p class="muted small">ضع قطعة «المشي» أمام الآيباد وسهمها يشير بعيدًا عنه. عدّل الدوران والانعكاس حتى يظهر السهم متجهًا للأعلى. ثم اسحب النقاط الأربع إلى زوايا منطقة اللعب.</p>
+      <h2>٢. الاتجاه ومنطقة اللعب</h2>
+      <p class="muted small">تُضبط تلقائيًا عند أول تشغيل. أفرغ الطاولة ثم اضغط «معايرة تلقائية» عند الحاجة. للتأكد: قطعة «مشي» سهمها <b>نحو الآيباد</b> تظهر للأعلى، والرقم ٤ أو ٥ يظهر مقروءًا غير معكوس. التعديل اليدوي متاح بالأزرار وسحب النقاط.</p>
+      <div class="row">
+        <button id="btnAuto" class="primary">معايرة تلقائية</button>
+      </div>
+      <p id="autoInfo" class="small"></p>
       <div class="row">
         <button id="btnRotate" class="tool">تدوير ٩٠°</button>
         <button id="btnFlipH" class="tool">عكس أفقي</button>
@@ -65,6 +69,8 @@
       <dl id="diag" class="diag mono"></dl>
       <div class="row">
         <button id="btnReport" class="tool">نسخ تقرير الاختبار</button>
+        <button id="btnZoom" class="tool" disabled>تقريب تلقائي (تجريبي)</button>
+        <button id="btnWb" class="tool" disabled>قفل توازن الأبيض (تجريبي)</button>
         <button id="btnSnapshot" class="tool">حفظ لقطة (بإذن)</button>
         <button id="btnExport" class="tool">نسخ الإعدادات كنص</button>
         <button id="btnImport" class="tool">لصق إعدادات</button>

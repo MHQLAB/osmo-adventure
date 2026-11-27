@@ -59,7 +59,7 @@ export function motionScore(prev, cur) {
 
 /** عتبات أولية — ستُضبط بعد اختبارات الآيباد الفعلية (غير معايرة بعد). */
 export const THRESHOLDS = {
-  minLuma: 60, maxLuma: 215, minContrast: 25, minSharpness: 40, maxDarkPct: 20, maxBrightPct: 8, maxCast: 0.18,
+  minLuma: 60, maxLuma: 215, minContrast: 25, minSharpness: 40, maxDarkPct: 20, maxBrightPct: 8, maxCast: 0.12,
 };
 
 /** يحوّل المقاييس إلى قائمة مشكلات برسائل عربية للوالدين. */
@@ -71,9 +71,10 @@ export function assessQuality(m, t = THRESHOLDS) {
   if (m.sharpness < t.minSharpness) issues.push({ code: 'blur', level: 'warn', msg: 'الصورة غير حادة. تأكد من تثبيت العاكس ونظافته.' });
   if (m.darkPct > t.maxDarkPct) issues.push({ code: 'shadow', level: 'warn', msg: 'توجد ظلال كبيرة على منطقة اللعب.' });
   if (m.brightPct > t.maxBrightPct) issues.push({ code: 'glare', level: 'warn', msg: 'يوجد لمعان أو انعكاس ضوئي على الطاولة.' });
-  const [r, g, b] = m.meanRGB; const avg = (r + g + b) / 3 || 1;
-  const cast = Math.max(Math.abs(r - avg), Math.abs(g - avg), Math.abs(b - avg)) / avg;
-  if (cast > t.maxCast) issues.push({ code: 'cast', level: 'info', msg: 'الإضاءة ملوّنة. الضوء الأبيض يحسّن تمييز الألوان.' });
+  // الانحراف اللوني يُقدَّر من البكسلات المحايدة فقط (illuminant.js)، لا من متوسط الصورة:
+  // متوسط الصورة يتبع لون الطاولة (خشب، مفرش…) وليس لون الإضاءة.
+  if (typeof m.illumCast === 'number' && m.illumCast > t.maxCast)
+    issues.push({ code: 'cast', level: 'info', msg: 'الإضاءة ملوّنة (صفراء أو زرقاء). يُصحَّح تلقائيًا، والضوء الأبيض أفضل.' });
   return issues;
 }
 

@@ -52,9 +52,10 @@ test('quality: well-lit checkerboard passes main checks', () => {
   assert.ok(!codes.includes('dark') && !codes.includes('bright') && !codes.includes('blur') && !codes.includes('flat'), codes.join());
 });
 
-test('quality: strong red cast reported', () => {
-  const m = analyze(img(32, 32, (x) => [220, 90 + (x % 2) * 60, 90]), 32, 32);
-  assert.ok(assessQuality(m).some((i) => i.code === 'cast'));
+test('quality: cast comes from illuminant estimate, not table color', () => {
+  const m = analyze(img(32, 32, () => [185, 132, 70]), 32, 32);
+  assert.ok(!assessQuality(m).some((i) => i.code === 'cast'));
+  assert.ok(assessQuality({ ...m, illumCast: 0.2 }).some((i) => i.code === 'cast'));
 });
 
 test('motionScore', () => {

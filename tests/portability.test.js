@@ -29,7 +29,7 @@ test('service worker caches relative paths only and app registers it relatively'
 
 test('every module the app imports is cached for offline', () => {
   const sw = read('sw.js');
-  for (const f of ['src/app.js', 'src/vision/geometry.js', 'src/vision/rectify.js', 'src/vision/quality.js', 'src/vision/adaptive.js',
+  for (const f of ['src/app.js', 'src/vision/geometry.js', 'src/vision/rectify.js', 'src/vision/quality.js', 'src/vision/adaptive.js', 'src/vision/autoorient.js', 'src/vision/illuminant.js', 'src/vision/motion.js', 'src/vision/roi.js',
     'src/calibration/store.js', 'src/platform/orientation.js', 'src/platform/camera.js', 'src/platform/storage.js']) {
     assert.ok(sw.includes(`'./${f}'`), f);
   }

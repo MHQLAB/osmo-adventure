@@ -47,3 +47,28 @@ export function estimateAspect(c) {
   const h = (d(c[0], c[3]) + d(c[1], c[2])) / 2;
   return h > 0 ? w / h : 1;
 }
+
+/**
+ * خطة قراءة منطقة اللعب بدقة محددة دون معالجة الإطار كله:
+ * نرسم فقط المستطيل المحيط بالزوايا، بمقياس يحقق دقة المخرج المطلوبة، ولا نكبّر فوق الدقة الأصلية.
+ * @param {Array<[number,number]>} cornersNorm زوايا نسبية (0–1) في الصورة المصححة
+ * @param {number} nativeW عرض الصورة المصححة بالدقة الأصلية للكاميرا
+ */
+export function planRoi(cornersNorm, nativeW, nativeH, targetMaxSide) {
+  const c = cornersNorm.map(([x, y]) => [x * nativeW, y * nativeH]);
+  const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
+  const bx = Math.max(0, Math.floor(Math.min(...xs))), by = Math.max(0, Math.floor(Math.min(...ys)));
+  const bx2 = Math.min(nativeW, Math.ceil(Math.max(...xs))), by2 = Math.min(nativeH, Math.ceil(Math.max(...ys)));
+  const d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  const roiW = (d(c[0], c[1]) + d(c[3], c[2])) / 2, roiH = (d(c[0], c[3]) + d(c[1], c[2])) / 2;
+  const nativeLong = Math.max(roiW, roiH, 1);
+  const outLong = Math.min(targetMaxSide, Math.round(nativeLong));
+  const out = outputSize(roiW / Math.max(roiH, 1), outLong);
+  const scale = Math.min(1, outLong / nativeLong);
+  const canvasW = Math.max(1, Math.ceil((bx2 - bx) * scale)), canvasH = Math.max(1, Math.ceil((by2 - by) * scale));
+  return {
+    bx, by, bw: bx2 - bx, bh: by2 - by, scale, canvasW, canvasH,
+    cornersCanvas: c.map(([x, y]) => [(x - bx) * scale, (y - by) * scale]),
+    outW: out.w, outH: out.h, nativeRoiW: Math.round(roiW), nativeRoiH: Math.round(roiH),
+  };
+}

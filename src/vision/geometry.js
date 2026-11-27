@@ -110,3 +110,18 @@ export function orientationTransform(w, h, { rotation = 0, flipH = false, flipV 
 export function mapPoint([a, b, c, d, e, f], x, y) {
   return [a * x + c * y + e, b * x + d * y + f];
 }
+
+/**
+ * أعلى تقريب (zoom) مركزي يُبقي كل الزوايا داخل الإطار مع هامش.
+ * التقريب في الكاميرا يقص حول المركز؛ والدوران/الانعكاس حول المركز لا يغيّر ذلك.
+ */
+export function zoomForCorners(cornersNorm, maxZoom = 1, margin = 0.03) {
+  const d = Math.max(...cornersNorm.map(([x, y]) => Math.max(Math.abs(x - 0.5), Math.abs(y - 0.5)))) + margin;
+  return Math.max(1, Math.min(maxZoom, 0.5 / Math.max(d, 1e-6)));
+}
+
+/** تحويل الزوايا النسبية عند تغيير التقريب من zFrom إلى zTo. */
+export function remapCornersForZoom(cornersNorm, zFrom, zTo) {
+  const k = zTo / zFrom;
+  return cornersNorm.map(([x, y]) => [0.5 + (x - 0.5) * k, 0.5 + (y - 0.5) * k]);
+}
