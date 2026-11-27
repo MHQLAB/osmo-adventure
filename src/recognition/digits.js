@@ -35,12 +35,28 @@ export function dice(a, b) {
  * @param {Array<[number,number]>} pts نقاط حبر الرقم
  * @param {Record<string,string[]>} templates قوالب كسلاسل '0101…'
  */
-export function readDigit(pts, templates, { step = 10 } = {}) {
+/**
+ * prior: الاتجاه المتوقع للرقم (درجات). الطفل يضع القطع مقابلة له، والصورة المصححة تضع الآيباد أعلى،
+ * فالرقم معتدل غالبًا. نبحث أولًا ضمن ±35° من الأولوية، ثم بكل الزوايا فقط إن كانت المطابقة ضعيفة.
+ */
+export function readDigit(pts, templates, { step = 10, prior = null } = {}) {
+  if (prior !== null) {
+    const priors = Array.isArray(prior) ? prior : [prior];
+    const near = readDigitRange(pts, templates, step, (deg) => priors.some((p) => Math.abs(((deg - p + 540) % 360) - 180) <= 35));
+    if (near.ok && near.score >= 0.68) return { ...near, prior: true };
+    const all = readDigitRange(pts, templates, step, () => true);
+    return all.ok && near.ok && near.score >= all.score - 0.03 ? { ...near, prior: true } : all;
+  }
+  return readDigitRange(pts, templates, step, () => true);
+}
+
+function readDigitRange(pts, templates, step, allow) {
   if (pts.length < 15) return { ok: false, reason: 'no-ink' };
   let mx = 0, my = 0; for (const [x, y] of pts) { mx += x; my += y; } mx /= pts.length; my /= pts.length;
   const centered = pts.map(([x, y]) => [x - mx, y - my]);
   const scores = {}; let mirrorBest = 0;
   for (let deg = 0; deg < 360; deg += step) {
+    if (!allow(deg)) continue;
     const bm = glyphBitmap(centered, deg), bmm = glyphBitmap(centered, deg, true);
     for (const [digit, list] of Object.entries(templates)) {
       for (const tpl of list) {

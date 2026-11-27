@@ -2,6 +2,9 @@
 // افتراض يحتاج تأكيدًا ماديًا: البرنامج يبدأ من طرف السلسلة الأقرب إلى الآيباد (أعلى الصورة).
 import { ACTION_TYPES } from './recognize.js';
 
+// حصر القطع المتوفرة (src/content/pieces.js) لكشف النتائج غير المنطقية
+export const INVENTORY = { walk: 6, jump: 3, hand: 3, rest: 2, repeat: 2, magic: 1, 'func-star': 1, 'func-circle': 1, 'func-square': 1 };
+
 export const REASON_AR = {
   'no-pieces': 'لا توجد قطع أوامر.',
   'unknown-piece': 'توجد قطعة غير معروفة.',
@@ -12,19 +15,23 @@ export const REASON_AR = {
   'multiple-chains': 'القطع ليست سلسلة واحدة متصلة.',
   'branching': 'السلسلة متفرعة.',
   'unstable': 'القطع تتحرك.',
+  'occluded': 'قطعة محجوبة أو غير واضحة بجانب البرنامج؛ أبعد اليد.',
+  'inventory': 'عدد قطع من نوع ما أكبر مما في المجموعة؛ قراءة غير منطقية.',
 };
 
-/** طرفا القطعة على محورها الطويل. */
-function ends(p) {
-  const ux = Math.cos(p.theta), uy = Math.sin(p.theta), hl = p.length / 2;
-  return [[p.cx - ux * hl, p.cy - uy * hl], [p.cx + ux * hl, p.cy + uy * hl]];
-}
-
-export function connected(a, b, gapFactor = 0.55) {
-  const ref = Math.min(a.length, b.length);
-  let best = Infinity;
-  for (const e of ends(a)) for (const f of ends(b)) best = Math.min(best, Math.hypot(e[0] - f[0], e[1] - f[1]));
-  return best < gapFactor * ref;
+/**
+ * اتصال قطعتين: تلامس/تقارب حدودهما من أي جانب. في برامج Osmo تتراص القطع على جانبها القصير
+ * (السلسلة عمودية على محور القطعة)، لذا لا نفترض الاتصال طرفًا بطرف.
+ */
+export function connected(a, b) {
+  const W = Math.min(a.width, b.width);
+  const [ax0, ay0, ax1, ay1] = a.bbox, [bx0, by0, bx1, by1] = b.bbox;
+  const gapX = Math.max(0, Math.max(ax0, bx0) - Math.min(ax1, bx1));
+  const gapY = Math.max(0, Math.max(ay0, by0) - Math.min(ay1, by1));
+  const ovX = Math.min(ax1, bx1) - Math.max(ax0, bx0), ovY = Math.min(ay1, by1) - Math.max(ay0, by0);
+  const minW = Math.min(ax1 - ax0, bx1 - bx0), minH = Math.min(ay1 - ay0, by1 - by0);
+  // متجاوران رأسيًا مع تداخل أفقي كافٍ، أو أفقيًا مع تداخل رأسي كافٍ
+  return (gapY < 0.45 * W && ovX > 0.3 * minW) || (gapX < 0.45 * W && ovY > 0.3 * minH);
 }
 
 export function buildProgram(result, { minConfidence = 0.6 } = {}) {
@@ -56,6 +63,13 @@ export function buildProgram(result, { minConfidence = 0.6 } = {}) {
   if (chains.length > 1) reasons.add('multiple-chains');
   const main = chains.sort((a, b) => b.length - a.length)[0];
   if (main.some((k) => adj.get(k).length > 2)) reasons.add('branching');
+  // كتلة بحجم قطعة بلا دليل بنيوي ملاصقة للسلسلة = قطعة محجوبة على الأرجح ← نرفض بدل تنفيذ برنامج ناقص
+  for (const sp of result.suspects || []) {
+    if (main.some((k) => connected(byId.get(k), { ...sp, width: sp.width }))) reasons.add('occluded');
+  }
+  // الجرد: أكثر مما في المجموعة = خطأ تعرف (نكشفه ولا نخفيه)
+  const counts = {}; for (const p of usable) counts[p.type] = (counts[p.type] || 0) + 1;
+  for (const [t, n] of Object.entries(counts)) if (n > (INVENTORY[t] ?? 99)) reasons.add('inventory');
   // الترتيب: من الطرف الأعلى (الأقرب للآيباد)
   const endpoints = main.filter((k) => adj.get(k).length <= 1);
   const start = (endpoints.length ? endpoints : main).reduce((a, b) => (byId.get(a).cy <= byId.get(b).cy ? a : b));

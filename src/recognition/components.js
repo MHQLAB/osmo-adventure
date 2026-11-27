@@ -37,18 +37,42 @@ export function shapeOf(px, w) {
   return { area: n, cx, cy, theta, length, width, elong: length / width, bbox: [x0, y0, x1, y1], fill: n / (length * width) };
 }
 
-/** أقصى نصف قطر لكل قطاع زاوي حول المركز → معامل الاختلاف (دائرة ≈ 0، مربع ≈ 0.1، نجمة > 0.18). */
-export function radialProfileCV(px, w, cx, cy, bins = 36) {
+/**
+ * أقصى نصف قطر لكل قطاع زاوي حول المركز → معامل الاختلاف (دائرة ≈ 0، مربع ≈ 0.1، نجمة > 0.18).
+ * whiten: تطبيع تغاير الشكل أولًا (المنظور عبر المرآة يجعل الدائرة بيضاوية؛ التطبيع يعيدها دائرة
+ * بينما يبقى المربع مربعًا لأن تغايره متساوٍ أصلًا).
+ */
+export function radialProfileCV(px, w, cx, cy, bins = 36, whiten = true) {
+  let T = [1, 0, 0, 1];
+  if (whiten) {
+    let a = 0, b = 0, c = 0; for (const j of px) { const dx = (j % w) - cx, dy = ((j / w) | 0) - cy; a += dx * dx; b += dy * dy; c += dx * dy; }
+    a /= px.length; b /= px.length; c /= px.length;
+    // Σ^{-1/2} لمصفوفة 2×2 متماثلة
+    const tr = a + b, det = a * b - c * c; if (det > 1e-9) {
+      const sq = Math.sqrt(det), t2 = Math.sqrt(tr + 2 * sq);
+      const m = [(a + sq) / t2, c / t2, c / t2, (b + sq) / t2]; // Σ^{1/2}
+      const md = m[0] * m[3] - m[1] * m[2];
+      T = [m[3] / md, -m[1] / md, -m[2] / md, m[0] / md];
+    }
+  }
   const maxR = new Float32Array(bins);
   for (const j of px) {
-    const dx = (j % w) - cx, dy = ((j / w) | 0) - cy;
-    const b = Math.min(bins - 1, Math.floor(((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI)) * bins));
-    const r = Math.hypot(dx, dy); if (r > maxR[b]) maxR[b] = r;
+    const dx0 = (j % w) - cx, dy0 = ((j / w) | 0) - cy;
+    const dx = T[0] * dx0 + T[1] * dy0, dy = T[2] * dx0 + T[3] * dy0;
+    const bb = Math.min(bins - 1, Math.floor(((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI)) * bins));
+    const r = Math.hypot(dx, dy); if (r > maxR[bb]) maxR[bb] = r;
   }
-  let s = 0, k = 0; for (const r of maxR) if (r > 0) { s += r; k++; }
+  let sum = 0, k = 0; for (const r of maxR) if (r > 0) { sum += r; k++; }
   if (k < bins * 0.6) return null;
-  const m = s / k; let v = 0; for (const r of maxR) if (r > 0) v += (r - m) ** 2;
-  return Math.sqrt(v / k) / m;
+  const mean = sum / k; let v = 0; for (const r of maxR) if (r > 0) v += (r - mean) ** 2;
+  return Math.sqrt(v / k) / mean;
+}
+
+/** نسبة أبعاد مكوّن دائري (المحور الأكبر/الأصغر) — من أقراص الأسهم لقياس تشوه المنظور. */
+export function ellipseAspect(px, w) {
+  let cx = 0, cy = 0; for (const j of px) { cx += j % w; cy += (j / w) | 0; } cx /= px.length; cy /= px.length;
+  let a = 0, b = 0; for (const j of px) { a += ((j % w) - cx) ** 2; b += (((j / w) | 0) - cy) ** 2; }
+  return Math.sqrt(a / Math.max(b, 1e-6)); // >1: أعرض من ارتفاعه
 }
 
 /** يملأ الثقوب المغلقة داخل مكون (لاستخراج الحبر أو الأيقونة المحاطة به) ضمن مستطيله المحيط. */

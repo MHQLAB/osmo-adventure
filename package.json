@@ -1,6 +1,6 @@
 {
   "name": "osmo-coding-adventure",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "منصة ألعاب برمجة عربية للأطفال تعمل بقطع Osmo Coding المادية — PWA بلا أدوات بناء",
   "type": "module",

@@ -47,9 +47,10 @@ test('rest, magic, repeat and the three functions', async () => {
   assert.deepEqual(types, ['func-circle', 'func-square', 'func-star', 'magic', 'repeat', 'rest']);
 });
 
+// واقعي: الرقم بجانب قرص قطعة أفقية، معتدل تقريبًا (±15°) كما يضعه الطفل
 for (const digit of [2, 3, 4, 5]) {
-  test(`number ${digit} attached to a walk piece (digit rotated 25°)`, async () => {
-    const s = await renderScene({ pieces: [{ type: 'walk', x: 300, y: 240, dir: 'up' }, { type: 'number', digit, x: 300 + 2.1 * 22 * 0.5 + 40, y: 240, angle: 90, digitAngle: 25 }] });
+  test(`number ${digit} attached to a horizontal walk piece (digit tilted 12°)`, async () => {
+    const s = await renderScene({ pieces: [{ type: 'walk', x: 300, y: 240, dir: 'up' }, { type: 'number', digit, x: 300 + 2.1 * 22 + 34, y: 240, angle: 0, digitAngle: 12 }] });
     const r = recognize(s.rgba, s.w, s.h);
     const walk = ok(r).find((p) => p.type === 'walk');
     assert.equal(walk?.number?.digit, digit, JSON.stringify(r.numbers.map((n) => n.read)));
@@ -98,4 +99,17 @@ test('expected-vs-actual parsing and comparison (Arabic and English, Arabic-Indi
   assert.equal(compareProgram(e, e).correct, true);
   const c = compareProgram(e, [{ type: 'walk', dir: 'up', count: 2 }, { type: 'jump', dir: 'right', count: 1 }]);
   assert.deepEqual(c.errors.map((x) => x.kind), ['count', 'missing']);
+});
+
+test('digit reader without prior still searches all rotations', async () => {
+  const { readDigit } = await import('../src/recognition/digits.js');
+  const { mergeTemplates } = await import('../src/recognition/recognize.js');
+  const { glyphBitmap, GW } = await import('../src/recognition/digits.js');
+  // «4» من القالب نفسه مُدار 120°
+  const tpl = mergeTemplates({})['4'].at(-1);
+  const pts = []; for (let i = 0; i < tpl.length; i++) if (tpl[i] === '1') { const x = (i % GW) * 4, y = Math.floor(i / GW) * 4; for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) pts.push([x + a, y + b]); }
+  const t = (120 * Math.PI) / 180; const rot = pts.map(([x, y]) => [x * Math.cos(t) - y * Math.sin(t), x * Math.sin(t) + y * Math.cos(t)]).map(([x, y]) => [Math.round(x), Math.round(y)]);
+  const r = readDigit(rot, mergeTemplates({}));
+  assert.equal(r.digit, 4, JSON.stringify(r));
+  assert.ok(glyphBitmap);
 });

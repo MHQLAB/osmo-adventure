@@ -67,7 +67,13 @@
     <section class="panel" id="panelRecog">
       <h2>٤. التعرف على القطع (تجريبي)</h2>
       <p class="muted small">ضع القطع وانتظر ثبات الصورة. ما يراه النظام يظهر هنا مباشرة. البرنامج يُقبل بعد قراءتين متطابقتين.</p>
+      <div class="row small" role="group" aria-label="عرض المسار">
+        <button class="tool viewbtn" data-view="overlay" aria-pressed="true">الحدود</button>
+        <button class="tool viewbtn" data-view="input" aria-pressed="false">الصورة الداخلة للمحرك</button>
+        <button class="tool viewbtn" data-view="mask" aria-pressed="false">قناع الألوان</button>
+      </div>
       <canvas id="recogCanvas"></canvas>
+      <div id="candGallery" class="gallery"></div>
       <p id="recogStatus" class="small"></p>
       <p id="recogProgram" class="program"></p>
       <ul id="recogList" class="checks small"></ul>
@@ -87,6 +93,32 @@
         <button id="btnRun" class="primary" disabled>▶ نفّذ على الروبوت</button>
       </div>
       <canvas id="robotCanvas" width="420" height="300"></canvas>
+    </section>
+
+    <section class="panel" id="panelGuided">
+      <h2>٥. الاختبار الموجّه (للوالدين)</h2>
+      <div class="row small">
+        <label>مجموعة العينة:
+          <select id="guidedSet"><option value="validation">تحقق (لقياس الدقة)</option><option value="dev">تطوير (لضبط الخوارزمية)</option></select>
+        </label>
+      </div>
+      <div class="guided">
+        <div id="guidedArt" class="art"></div>
+        <div>
+          <h3 id="guidedTitle"></h3>
+          <p id="guidedText" class="small"></p>
+          <div class="row"><input id="guidedExpected" type="text" aria-label="المتوقع"></div>
+          <div class="row">
+            <button id="btnGuidedCapture" class="primary">سجّل القراءة الحالية</button>
+            <button id="btnGuidedRetry" class="tool">أعد الاختبار</button>
+            <button id="btnGuidedPrev" class="ghost">السابق</button>
+            <button id="btnGuidedNext" class="tool">التالي</button>
+          </div>
+          <p id="guidedResult" class="small"></p>
+        </div>
+      </div>
+      <p id="guidedSummary" class="muted small"></p>
+      <div class="row"><button id="btnExportPack" class="primary">تصدير حزمة الاختبار</button></div>
     </section>
 
     <section class="panel" id="panelDiag" hidden>
@@ -120,6 +152,17 @@
         <button value="yes" class="primary">موافق</button>
         <button value="no" class="ghost">إلغاء</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="packDialog">
+    <form method="dialog">
+      <h3>تصدير حزمة الاختبار</h3>
+      <p class="small">الحزمة ملف ZIP يُحفظ على هذا الجهاز فقط. التقرير بلا معرفات. الصور اختيارية — راجعها قبل الموافقة.</p>
+      <div id="packPreview" class="gallery"></div>
+      <label class="small"><input type="checkbox" id="packImages"> أوافق على تضمين صور منطقة اللعب أعلاه (الصورة الداخلة، الحدود، القناع، الأقراص والأرقام)</label><br>
+      <label class="small"><input type="checkbox" id="packRaw"> تضمين صورة الكاميرا الخام كاملة (قد تظهر فيها الغرفة والأشخاص — غير مستحسن)</label>
+      <div class="row"><button value="yes" class="primary">تصدير</button><button value="no" class="ghost">إلغاء</button></div>
     </form>
   </dialog>
 

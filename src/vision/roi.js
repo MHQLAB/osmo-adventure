@@ -24,6 +24,26 @@ export function cellMeans(rgba, w, h, cols, rows) {
 }
 
 /**
+ * خط فاصل لامع أفقي قرب جهة الآيباد (حافة القاعدة/الشاشة). ما بعده انعكاس للقطع على زجاج الشاشة
+ * (مثبت من لقطة خام 2026-11-27: القطع متماثلة على جانبي الخط). يعيد y نسبيًا أو null.
+ */
+export function findSeparator(rgba, w, h, { maxY = 0.45, minRun = 0.25, maxGap = 0.03 } = {}) {
+  let best = null;
+  for (let y = 1; y < Math.floor(h * maxY); y++) {
+    // مسار لامع طويل مع السماح بفجوات قصيرة (أصابع/ظلال تعبر الخط)
+    let run = 0, gap = 0, maxRun = 0; const G0 = Math.ceil(maxGap * w);
+    for (let x = 0; x < w; x++) {
+      const p = (y * w + x) * 4; const R = rgba[p], G = rgba[p + 1], B = rgba[p + 2];
+      const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+      if (mx > 175 && (mx - mn) / mx < 0.2) { run++; gap = 0; if (run > maxRun) maxRun = run; }
+      else if (run && ++gap <= G0) { /* فجوة مسموحة */ } else { run = 0; gap = 0; }
+    }
+    if (maxRun >= minRun * w && (!best || maxRun > best.run)) best = { y, run: maxRun };
+  }
+  return best ? { y: best.y / h, run: +(best.run / w).toFixed(2) } : null;
+}
+
+/**
  * نسبة الخلايا المعتمة على كل حافة. مع العاكس تكون جهة القاعدة/الآيباد هي الأكثر عتمة غالبًا (دليل مساعد على الاتجاه، لا حاسم).
  */
 export function darkSides(m, cols, rows, depth = 2) {
@@ -119,13 +139,17 @@ export function autoPlayArea(rgba, w, h, { cols = 32, rows = 18, chromaTol = 0.0
   }
   if (!rect) return null;
   // هامش نصف خلية للداخل
-  const x0 = (rect.x0 + 0.5) / cols, x1 = (rect.x1 + 0.5) / cols, y0 = (rect.y0 + 0.5) / rows, y1 = (rect.y1 + 0.5) / rows;
+  const x0 = (rect.x0 + 0.5) / cols, x1 = (rect.x1 + 0.5) / cols, y1 = (rect.y1 + 0.5) / rows;
+  let y0 = (rect.y0 + 0.5) / rows;
+  // ما فوق الخط الفاصل انعكاس: نبدأ منطقة اللعب بعده
+  const sep = findSeparator(rgba, w, h);
+  if (sep && sep.y + 0.02 > y0 && sep.y + 0.02 < y1 - 0.15) y0 = sep.y + 0.02;
   const areaFrac = rect.area / (cols * rows);
   // الثقة: مساحة معقولة + تمايز بين الطاولة وما حولها
   const confidence = Math.max(0, Math.min(1, (areaFrac - 0.1) / 0.4)) * (tableCells < cols * rows * 0.97 ? 1 : 0.6);
   return {
     corners: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
     confidence: fallback ? confidence * 0.7 : confidence, fallback, tableFraction: tableCells / (cols * rows), areaFraction: areaFrac,
-    reference: ref, mask, cols, rows, darkSides: darkSides(m, cols, rows),
+    reference: ref, mask, cols, rows, darkSides: darkSides(m, cols, rows), separator: sep,
   };
 }

@@ -44,10 +44,33 @@ try {
     const D = window.__osmoDebug; D.state.stable = true;
     const img = new ImageData(new Uint8ClampedArray(data), w, h);
     D.runRecognition(img); D.runRecognition(img);
+    D.state.stable = false; D.state.lastReRead = performance.now() + 1e9; // نمنع القراءة الدورية للكاميرا الوهمية من استبدال النتيجة
     return { program: document.getElementById('recogProgram').textContent, status: document.getElementById('recogStatus').textContent, run: !document.getElementById('btnRun').disabled };
   }, { data: Array.from(scene.rgba), w: scene.w, h: scene.h });
   check('in-browser recognition renders program and accepts after two identical reads', rec.program === 'مشي أعلى، قفز يمين، يد يسار' && rec.run, JSON.stringify(rec));
-  await page.click('#btnRun'); await page.waitForTimeout(1500);
+  await page.evaluate(() => document.getElementById('btnRun').click()); await page.waitForTimeout(1500);
+
+  // عروض المسار والمعرض
+  await page.click('.viewbtn[data-view="mask"]'); await page.waitForTimeout(200);
+  const gal = await page.evaluate(() => document.querySelectorAll('#candGallery figure').length);
+  check('mask view renders and candidate gallery shows dial crops', gal >= 3, `crops=${gal}`);
+  await page.click('.viewbtn[data-view="overlay"]');
+
+  // الاختبار الموجّه: الخطوة 13 (قطعتان) — نسجل ونقارن
+  const g = await page.evaluate(() => { const D = window.__osmoDebug; D.state.guided.idx = 13; document.getElementById('btnGuidedNext').click(); document.getElementById('btnGuidedPrev').click();
+    document.getElementById('guidedExpected').value = 'مشي أعلى، قفز يمين، يد يسار'; D.guidedCapture(); return { res: document.getElementById('guidedResult').textContent, sum: document.getElementById('guidedSummary').textContent }; });
+  check('guided capture records a correct attempt in the validation set', g.res.startsWith('✓') && g.sum.includes('تحقق: محاولات 1'), JSON.stringify(g));
+
+  // حزمة التصدير ZIP مع الصور بالموافقة
+  await page.click('#btnExportPack'); await page.waitForTimeout(300);
+  const prev = await page.evaluate(() => document.querySelectorAll('#packPreview figure').length);
+  await page.check('#packImages');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#packDialog button[value="yes"]')]);
+  const zipPath = await dl.path();
+  const { execFileSync } = await import('node:child_process');
+  const listing = execFileSync('python3', ['-c', "import zipfile,sys,json;z=zipfile.ZipFile(sys.argv[1]);n=z.namelist();r=json.loads(z.read('report.json'));print(json.dumps({'n':len(n),'imgs':sum(1 for x in n if x.startswith('images/')),'raw':any('raw' in x for x in n),'ids':('deviceId' in z.read('report.json').decode()) or ('groupId' in z.read('report.json').decode()),'guided':len(r['guided']['records'])}))", zipPath]).toString();
+  const z = JSON.parse(listing);
+  check('test pack ZIP: report + consented images, no raw, no camera ids', prev >= 3 && z.imgs >= 3 && !z.raw && !z.ids && z.guided >= 1, listing.trim());
 
   // الإطار الأسود: نستبدل مصدر الفيديو بإطارات سوداء ونتحقق من الرفض ثم الاستعادة دون حلقة
   await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 640; c.height = 480; const x = c.getContext('2d'); setInterval(() => { x.fillStyle = '#000'; x.fillRect(0, 0, 640, 480); }, 50); document.getElementById('video').srcObject = c.captureStream(15); document.getElementById('video').play(); });

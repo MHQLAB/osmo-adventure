@@ -24,6 +24,10 @@ import { buildProgram, stepsToText, parseExpected, compareProgram, REASON_AR } f
 import { glyphBitmap, dice } from './recognition/digits.js';
 import { BUILTIN_DIGIT_TEMPLATES } from './recognition/digit-templates.js';
 import { runProgram } from './engine/robot.js';
+import { createZip } from './ui/zip.js';
+import { STEPS, evaluateAttempt, summarize } from './ui/guided.js';
+import { stepArt } from './ui/pieceArt.js';
+import { LABEL_COLORS } from './recognition/pixels.js';
 
 export const APP_VERSION = 'dev'; // يُختم عند النشر
 const PREVIEW_SIDE = 640;
@@ -45,7 +49,11 @@ const el = {
   recogCanvas: $('recogCanvas'), recogStatus: $('recogStatus'), recogProgram: $('recogProgram'), recogList: $('recogList'),
   expectedInput: $('expectedInput'), btnCompare: $('btnCompare'), btnResetStats: $('btnResetStats'), recogStats: $('recogStats'),
   btnRun: $('btnRun'), robotCanvas: $('robotCanvas'), btnForgetDigits: $('btnForgetDigits'),
+  candGallery: $('candGallery'), guidedSet: $('guidedSet'), guidedArt: $('guidedArt'), guidedTitle: $('guidedTitle'), guidedText: $('guidedText'),
+  guidedExpected: $('guidedExpected'), guidedResult: $('guidedResult'), guidedSummary: $('guidedSummary'),
+  packDialog: $('packDialog'), packPreview: $('packPreview'), packImages: $('packImages'), packRaw: $('packRaw'),
 };
+const GUIDED_KEY = 'osmo.guided.v1';
 
 const store = new CalibrationStore(safeStorage());
 const scheduler = new AdaptiveScheduler({ budgetMs: 8 });
@@ -68,7 +76,8 @@ const state = {
   drag: -1, savedForOrientation: false, wakeLock: null, raf: 0,
   frame: { status: 'starting', valid: false, lastVideoTime: -1, rvfc: false, events: [] }, recovering: false, gaveUp: false,
   monMsHist: [], readMsHist: [], lastReRead: 0, consentMode: 'rect',
-  recog: { result: null, program: null, prevText: '', accepted: null, ms: 0, msHist: [], reads: 0, okReads: 0, robot: null },
+  recog: { result: null, program: null, prevText: '', accepted: null, ms: 0, msHist: [], reads: 0, okReads: 0, robot: null, input: null, view: 'overlay', runsT: [] },
+  guided: { idx: 0, readsAtStart: 0, okAtStart: 0 },
 };
 
 const ctxC = el.corrected.getContext('2d', { willReadFrequently: true });
@@ -132,6 +141,15 @@ function init() {
   el.btnRun.onclick = runRobot;
   el.btnForgetDigits.onclick = () => { try { localStorage.removeItem(DIGITS_KEY); } catch { /* */ } el.recogStatus.textContent = 'مُسحت الأرقام المتعلَّمة.'; };
   document.querySelectorAll('.teach').forEach((b) => { b.onclick = () => teachDigit(b.dataset.digit); });
+  document.querySelectorAll('.viewbtn').forEach((b) => { b.onclick = () => { state.recog.view = b.dataset.view; document.querySelectorAll('.viewbtn').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); if (state.recog.input) renderRecognition(state.recog.input); }; });
+  $('btnGuidedCapture').onclick = guidedCapture;
+  $('btnGuidedRetry').onclick = () => { saveGuided(loadGuided().filter((r) => !(r.step === STEPS[state.guided.idx].id && r.set === el.guidedSet.value))); showGuided(); };
+  $('btnGuidedNext').onclick = () => { state.guided.idx = Math.min(STEPS.length - 1, state.guided.idx + 1); showGuided(); };
+  $('btnGuidedPrev').onclick = () => { state.guided.idx = Math.max(0, state.guided.idx - 1); showGuided(); };
+  el.guidedSet.onchange = showGuided;
+  $('btnExportPack').onclick = openPackDialog;
+  el.packDialog.addEventListener('close', () => { if (el.packDialog.returnValue === 'yes') exportPack(); });
+  showGuided();
   renderStats();
   setupPointer();
   onOrientationChange(handleOrientationChange);
@@ -424,7 +442,8 @@ function readHighRes(now) {
   const ms = performance.now() - t0;
   state.rd.lastMs = ms; state.rd.count++; state.rd.at = now; state.busyMs += ms;
   pushHist(state.readMsHist, ms);
-  if (state.frame.valid) runRecognition(img);
+  // التعرف فقط عند صلاحية الإطار وثبات المنطقة (لا معالجة مكلفة أثناء تحريك القطع)، وزمنه يُحسب في الانشغال
+  if (state.frame.valid && state.stable) { const r0 = performance.now(); runRecognition(img); state.busyMs += performance.now() - r0; }
   // دقة تكيفية: إن كانت القراءة بطيئة نخفض المستوى التالي
   if (ms > 120 && state.rd.level < READ_LEVELS.length - 1) { state.rd.level++; state.rd.key = ''; }
   else if (ms < 40 && state.rd.level > 0) { state.rd.level--; state.rd.key = ''; }
@@ -494,7 +513,9 @@ function learnedDigits() { try { return JSON.parse(localStorage.getItem(DIGITS_K
 function runRecognition(img) {
   const t0 = performance.now();
   const gains = state.illum?.reliable ? state.illum.gains : undefined;
-  const res = recognize(img.data, img.width, img.height, { gains, learnedDigits: learnedDigits() });
+  const res = recognize(img.data, img.width, img.height, { gains, learnedDigits: learnedDigits(), debug: true });
+  state.recog.input = new ImageData(new Uint8ClampedArray(img.data), img.width, img.height);
+  state.recog.runsT.push(performance.now()); state.recog.runsT = state.recog.runsT.filter((t) => performance.now() - t < 10000);
   const prog = buildProgram(res);
   if (!state.stable) prog.reasons = [...new Set([...prog.reasons, 'unstable'])], prog.ok = false;
   const text = stepsToText(prog.steps);
@@ -514,9 +535,47 @@ const STATUS_AR = { ok: 'واضحة', uncertain: 'غير مؤكدة', unknown: '
 
 function renderRecognition(img) {
   const { result: r, program: p } = state.recog;
+  if (!r) return;
   const c = el.recogCanvas, ctx = c.getContext('2d');
   if (c.width !== img.width || c.height !== img.height) { c.width = img.width; c.height = img.height; }
+  if (state.recog.view === 'mask') { ctx.putImageData(maskImage(r, img.width, img.height), 0, 0); renderGallery(img, r); renderRecogText(r, p); return; }
   ctx.putImageData(img, 0, 0);
+  if (state.recog.view === 'input') { renderGallery(img, r); renderRecogText(r, p); return; }
+  drawRecogOverlay(ctx, img, r, p);
+  renderGallery(img, r); renderRecogText(r, p);
+}
+
+function maskImage(r, w, h) {
+  const out = new ImageData(w, h); const labs = r.debug?.labels;
+  if (!labs) return out;
+  for (let i = 0; i < labs.length; i++) { const c = LABEL_COLORS[labs[i]]; out.data[i * 4] = c[0]; out.data[i * 4 + 1] = c[1]; out.data[i * 4 + 2] = c[2]; out.data[i * 4 + 3] = 255; }
+  return out;
+}
+
+/** قص مربع من الصورة الداخلة إلى لوحة صغيرة. */
+function cropCanvas(img, cx, cy, half, size = 72) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  const src = document.createElement('canvas'); src.width = img.width; src.height = img.height; src.getContext('2d').putImageData(img, 0, 0);
+  cv.getContext('2d').drawImage(src, cx - half, cy - half, half * 2, half * 2, 0, 0, size, size);
+  return cv;
+}
+
+function candidateCrops(img, r) {
+  const out = [];
+  for (const p of r.pieces) if (p.dial) out.push({ cv: cropCanvas(img, p.dial.cx, p.dial.cy, p.dial.r * 1.4), cap: `قرص ${TYPE_AR[p.type] || p.type}: ${p.arrow?.ok ? DIR_AR[p.arrow.dir] + ' ' + Math.round(p.arrow.confidence * 100) + '٪' : 'غير مقروء'}`, name: `dial-${p.id}` });
+  for (const p of r.pieces) if (p.type === 'walk' || p.type === 'jump' || p.type === 'hand') if (!p.dial) out.push({ cv: cropCanvas(img, p.cx, p.cy, Math.max(p.length, p.width) * 0.6), cap: `${TYPE_AR[p.type]}: لا قرص`, name: `nodial-${p.id}` });
+  for (const n of r.numbers) { const [x0, y0, x1, y1] = n.bbox; out.push({ cv: cropCanvas(img, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) * 0.6), cap: `رقم: ${n.digit ?? '؟'} ${n.read?.ok ? Math.round(n.read.confidence * 100) + '٪' : n.reasons?.[0] || ''}`, name: `number-${n.id}` }); }
+  for (const s of r.suspects || []) out.push({ cv: cropCanvas(img, s.cx, s.cy, s.width * 1.2), cap: 'مشتبهة/محجوبة', name: `suspect-${s.cx}-${s.cy}` });
+  for (const x of (r.debug?.rejected || []).filter((q) => !q.suspect).slice(0, 6)) out.push({ cv: cropCanvas(img, x.cx, x.cy, 30), cap: `مرفوض: ${x.why === 'thin' ? 'رفيع' : 'بلا قرص/أيقونة'}`, name: `rejected-${x.cx}-${x.cy}` });
+  return out;
+}
+
+function renderGallery(img, r) {
+  el.candGallery.innerHTML = '';
+  for (const c of candidateCrops(img, r).slice(0, 24)) { const f = document.createElement('figure'); f.appendChild(c.cv); const cap = document.createElement('figcaption'); cap.textContent = c.cap; f.appendChild(cap); el.candGallery.appendChild(f); }
+}
+
+function drawRecogOverlay(ctx, img, r, p) {
   const color = { ok: '#00e676', uncertain: '#ffea00', unknown: '#ff1744', ghost: '#9e9e9e' };
   const orderOf = new Map((p?.order || []).map((id, i) => [id, i + 1]));
   ctx.lineWidth = Math.max(2, img.width / 320); ctx.font = `${Math.max(12, img.width / 50)}px sans-serif`;
@@ -531,6 +590,11 @@ function renderRecognition(img) {
     }
   }
   for (const n of r.numbers) { const [x0, y0, x1, y1] = n.bbox; ctx.setLineDash([6, 4]); ctx.strokeStyle = '#ff9100'; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0); ctx.setLineDash([]); }
+  for (const sp of r.suspects || []) { const [x0, y0, x1, y1] = sp.bbox; ctx.setLineDash([3, 3]); ctx.strokeStyle = '#ff1744'; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0); ctx.setLineDash([]); }
+}
+
+function renderRecogText(r, p) {
+  const orderOf = new Map((p?.order || []).map((id, i) => [id, i + 1]));
   const conf = (v) => `${Math.round((v || 0) * 100)}٪`;
   el.recogList.innerHTML = r.pieces.map((pc) => {
     const parts = [`${orderOf.get(pc.id) ? `#${orderOf.get(pc.id)} ` : ''}${TYPE_AR[pc.type] || pc.type}`, STATUS_AR[pc.status], `ثقة ${conf(pc.confidence)}`,
@@ -543,7 +607,8 @@ function renderRecognition(img) {
   const acc = state.recog.accepted;
   el.recogStatus.textContent = [
     p.ok ? (acc ? '✓ البرنامج مقبول (قراءتان متطابقتان)' : 'قراءة صحيحة — بانتظار التأكيد بقراءة ثانية') : `مرفوض: ${p.reasons.map((x) => REASON_AR[x] || x).join(' ')}`,
-    `زمن التعرف ${Math.round(state.recog.ms)}ms`, `قراءات ناجحة ${state.recog.okReads}/${state.recog.reads}`,
+    `زمن التعرف ${Math.round(state.recog.ms)}ms`, `معدل التعرف ${(state.recog.runsT.length / 10).toFixed(1)}/ث`, `قراءات ناجحة ${state.recog.okReads}/${state.recog.reads}`,
+    (r.suspects || []).length ? `مشتبهة ${(r.suspects || []).length}` : '', r.rejectedCount ? `مرفوض ${r.rejectedCount}` : '',
     r.scale.dialPx ? `قطر القرص ${r.scale.dialPx}px` : '', r.evidence.mirroredDigits ? `⚠ أرقام تبدو معكوسة (${r.evidence.mirroredDigits})` : '',
   ].filter(Boolean).join(' · ');
   el.btnRun.disabled = !acc;
@@ -628,6 +693,88 @@ async function zoomSweep() {
   state.zoomSweep = rows;
   el.autoInfo.textContent = 'نتيجة اختبار التقريب: ' + rows.map((r) => `${r.zoom}× ${r.inFrame ? '' : '(المنطقة تخرج عن الإطار) '}قرص ${r.dialPx}px حدة ${r.sharp} قطع ${r.pieces}`).join(' | ') +
     '. ملاحظة: الالتقاط 1920 من مستشعر 2736، فالتقريب حتى ~1.4× يأخذ تفاصيل حقيقية من المستشعر، وما بعده تكبير رقمي بلا تفاصيل جديدة.';
+}
+
+// ---------- الاختبار الموجّه ----------
+function loadGuided() { try { return JSON.parse(localStorage.getItem(GUIDED_KEY)) || []; } catch { return []; } }
+function saveGuided(rs) { try { localStorage.setItem(GUIDED_KEY, JSON.stringify(rs.slice(-500))); } catch { /* اختياري */ } }
+
+function showGuided() {
+  const st = STEPS[state.guided.idx];
+  el.guidedArt.innerHTML = stepArt(st.art);
+  el.guidedTitle.textContent = `${state.guided.idx + 1}/${STEPS.length} — ${st.title}`;
+  el.guidedText.textContent = st.text;
+  el.guidedExpected.value = st.expected;
+  el.guidedExpected.placeholder = st.expected ? '' : 'فارغ = لا قطع';
+  state.guided.readsAtStart = state.recog.reads; state.guided.okAtStart = state.recog.okReads;
+  const recs = loadGuided().filter((r) => r.step === st.id && r.set === el.guidedSet.value);
+  el.guidedResult.textContent = recs.length ? `محاولات هذه الخطوة: ${recs.length}، صحيحة: ${recs.filter((r) => r.correct).length}` : '';
+  renderGuidedSummary();
+}
+
+function guidedCapture() {
+  const st = STEPS[state.guided.idx];
+  const { result, program } = state.recog;
+  if (!result) { el.guidedResult.textContent = 'لا توجد قراءة بعد: انتظر ثبات الصورة.'; return; }
+  const rec = evaluateAttempt(st, el.guidedExpected.value, result, program, {
+    set: el.guidedSet.value, recogMs: Math.round(state.recog.ms), stable: state.stable, accepted: state.recog.accepted?.text || null,
+    readsInStep: state.recog.reads - state.guided.readsAtStart, okReadsInStep: state.recog.okReads - state.guided.okAtStart,
+    orientation: state.orientation, appVersion: APP_VERSION,
+  });
+  const rs = loadGuided(); rs.push(rec); saveGuided(rs);
+  const parts = [rec.correct ? '✓ صحيح' : '✗ خطأ', `الفعلي: ${rec.actual || 'لا شيء'}`];
+  if (Object.keys(rec.missing).length) parts.push(`ناقص: ${JSON.stringify(rec.missing)}`);
+  if (Object.keys(rec.extra).length) parts.push(`زائد: ${JSON.stringify(rec.extra)}`);
+  if (rec.dirCorrect === false) parts.push('اتجاه خاطئ'); if (rec.numberCorrect === false) parts.push('رقم خاطئ');
+  if (rec.reasons.length) parts.push(`أسباب: ${rec.reasons.map((x) => REASON_AR[x] || x).join(' ')}`);
+  el.guidedResult.textContent = parts.join(' · ');
+  renderGuidedSummary();
+}
+
+function renderGuidedSummary() {
+  const s = summarize(loadGuided());
+  const fmt = (x) => (x ? `${x.ok}/${x.n} (${x.pct}٪)` : '—');
+  el.guidedSummary.textContent = ['validation', 'dev'].map((k) => `${k === 'validation' ? 'تحقق' : 'تطوير'}: محاولات ${s[k].attempts}، صحيحة ${s[k].correct}، قطع وهمية على السطح الفارغ ${s[k].emptyFalsePositives}، الاتجاه ${fmt(s[k].dirAccuracy)}، الأرقام ${fmt(s[k].numberAccuracy)}، قبول البرنامج ${fmt(s[k].programAccepted)}`).join(' | ');
+}
+
+// ---------- حزمة التصدير ----------
+function packImages() {
+  const img = state.recog.input, r = state.recog.result; if (!img || !r) return [];
+  const toCanvas = (im) => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; c.getContext('2d').putImageData(im, 0, 0); return c; };
+  const input = toCanvas(img);
+  const overlay = toCanvas(img); drawRecogOverlay(overlay.getContext('2d'), img, r, state.recog.program);
+  const mask = toCanvas(maskImage(r, img.width, img.height));
+  return [{ name: 'images/engine-input.png', cv: input, cap: 'الصورة الداخلة' }, { name: 'images/overlay.png', cv: overlay, cap: 'الحدود' }, { name: 'images/mask.png', cv: mask, cap: 'القناع' },
+    ...candidateCrops(img, r).map((c) => ({ name: `images/candidates/${c.name}.png`, cv: c.cv, cap: c.cap }))];
+}
+
+function openPackDialog() {
+  el.packPreview.innerHTML = ''; el.packImages.checked = false; el.packRaw.checked = false;
+  for (const it of packImages().slice(0, 12)) { const f = document.createElement('figure'); f.appendChild(it.cv); const cap = document.createElement('figcaption'); cap.textContent = it.cap; f.appendChild(cap); el.packPreview.appendChild(f); }
+  if (!state.recog.input) el.packPreview.textContent = 'لا توجد صورة تعرف بعد؛ ستُصدَّر التقارير فقط.';
+  el.packDialog.showModal();
+}
+
+const canvasBytes = (cv, type = 'image/png', q) => new Promise((res) => cv.toBlob(async (b) => res(b ? new Uint8Array(await b.arrayBuffer()) : null), type, q));
+
+async function exportPack() {
+  const recs = loadGuided();
+  let backup = null; try { backup = sanitizeBackup(JSON.parse(exportSettings(localStorage))); } catch { /* */ }
+  const r = state.recog.result;
+  const report = sanitize({
+    appVersion: APP_VERSION, exportedAt: new Date().toISOString(), diagnostics: diagData(), calibration: backup,
+    guided: { records: recs, summary: summarize(recs) },
+    lastRecognition: r ? { pieces: r.pieces.map(({ glyph, ...p }) => p), numbers: r.numbers.map(({ glyph, ...n }) => n), suspects: r.suspects, rejected: r.debug?.rejected, scale: r.scale, timings: r.timings, table: r.table, program: state.recog.program, accepted: state.recog.accepted } : null,
+    lastExpected: el.guidedExpected.value || el.expectedInput.value || null,
+    imagesIncluded: el.packImages.checked, rawIncluded: el.packRaw.checked,
+  });
+  const files = [{ name: 'report.json', data: JSON.stringify(report, null, 1) }];
+  if (el.packImages.checked) for (const it of packImages()) { const b = await canvasBytes(it.cv); if (b) files.push({ name: it.name, data: b }); }
+  if (el.packRaw.checked && el.video.videoWidth) {
+    const c = document.createElement('canvas'); c.width = el.video.videoWidth; c.height = el.video.videoHeight; c.getContext('2d').drawImage(el.video, 0, 0);
+    const b = await canvasBytes(c, 'image/jpeg', 0.85); if (b) files.push({ name: 'images/raw-camera.jpg', data: b });
+  }
+  downloadBlob(new Blob([createZip(files)], { type: 'application/zip' }), `osmo-test-pack-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.zip`);
 }
 
 // ---------- الزوايا (لمس/سحب) ----------
@@ -830,4 +977,4 @@ function registerServiceWorker() {
 }
 
 // للاختبار الآلي فقط
-window.__osmoDebug = { state, diagData, autoCalibrate, readHighRes, health, recovery, runRecognition };
+window.__osmoDebug = { state, diagData, autoCalibrate, readHighRes, health, recovery, runRecognition, guidedCapture, packImages };

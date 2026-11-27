@@ -51,3 +51,13 @@ input[type=text] { font: inherit; font-size: 16px; min-height: 48px; padding: 0 
 .triple { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .triple figure { margin: 0; } .triple canvas { width: 100%; height: auto; background: #000; border-radius: 8px; display: block; }
 .triple figcaption { font-size: .75rem; color: var(--muted); text-align: center; }
+.gallery { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.gallery figure { margin: 0; background: #0b1124; border-radius: 8px; padding: 4px; text-align: center; }
+.gallery canvas, .gallery img { display: block; width: 72px; height: 72px; object-fit: contain; image-rendering: pixelated; }
+.gallery figcaption { font-size: .7rem; color: var(--muted); max-width: 80px; }
+#packPreview canvas { width: 120px; height: 90px; }
+.guided { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 600px) { .guided { grid-template-columns: 1fr; } }
+.art { background: #0b1124; border-radius: 12px; padding: 8px; }
+.art svg { width: 100%; height: auto; }
+h3 { margin: 0 0 6px; font-size: 1rem; }
