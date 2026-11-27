@@ -3,6 +3,7 @@
 import { chromium } from 'playwright';
 import { startServer } from './serve.js';
 import { mkdir } from 'node:fs/promises';
+import { renderScene } from '../tests/helpers/synth.js';
 
 const PORT = 8123;
 const out = new URL('../docs/smoke/', import.meta.url).pathname;
@@ -34,6 +35,43 @@ try {
   const rd = await page.evaluate(() => { const D = window.__osmoDebug; D.readHighRes(performance.now()); return { count: D.state.rd.count, out: `${D.state.rd.plan.outW}x${D.state.rd.plan.outH}`, ms: Math.round(D.state.rd.lastMs) }; });
   check('high-res read tier (up to 960) runs on demand', rd.count === 1 && rd.out.startsWith('960'), JSON.stringify(rd));
 
+  // التعرف داخل المتصفح على مشهد اصطناعي (يثبت ربط الواجهة، لا دقة القطع الحقيقية)
+  const u = 22;
+  const scene = await renderScene({ w: 640, h: 480, pieces: [
+    { type: 'walk', x: 320, y: 120, angle: 90, dir: 'up' }, { type: 'jump', x: 320, y: 120 + 4.2 * u + 2, angle: 90, dir: 'right' },
+    { type: 'hand', x: 320, y: 120 + 2 * (4.2 * u + 2), angle: 90, dir: 'left' }] });
+  const rec = await page.evaluate(async ({ data, w, h }) => {
+    const D = window.__osmoDebug; D.state.stable = true;
+    const img = new ImageData(new Uint8ClampedArray(data), w, h);
+    D.runRecognition(img); D.runRecognition(img);
+    return { program: document.getElementById('recogProgram').textContent, status: document.getElementById('recogStatus').textContent, run: !document.getElementById('btnRun').disabled };
+  }, { data: Array.from(scene.rgba), w: scene.w, h: scene.h });
+  check('in-browser recognition renders program and accepts after two identical reads', rec.program === 'مشي أعلى، قفز يمين، يد يسار' && rec.run, JSON.stringify(rec));
+  await page.click('#btnRun'); await page.waitForTimeout(1500);
+
+  // الإطار الأسود: نستبدل مصدر الفيديو بإطارات سوداء ونتحقق من الرفض ثم الاستعادة دون حلقة
+  await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 640; c.height = 480; const x = c.getContext('2d'); setInterval(() => { x.fillStyle = '#000'; x.fillRect(0, 0, 640, 480); }, 50); document.getElementById('video').srcObject = c.captureStream(15); document.getElementById('video').play(); });
+  await page.waitForTimeout(2500);
+  d = await diag(page);
+  check('black frames detected and never treated as valid', d.frame.events.some((e) => e.kind.startsWith('recover:black')) || d.frame.status === 'black', JSON.stringify(d.frame));
+  await page.waitForTimeout(6000);
+  d = await diag(page);
+  check('camera recovered automatically after black frames', d.frame.valid === true && d.frame.status === 'ok', JSON.stringify({ s: d.frame.status, ev: d.frame.events.map((e) => e.kind) }));
+
+  // تغير ارتفاع النافذة (شريط Safari) دون تغير الاتجاه: لا إعادة معايرة ولا أخطاء
+  const before = (await diag(page)).corners;
+  await page.setViewportSize({ width: 1180, height: 760 }); await page.waitForTimeout(800);
+  await page.setViewportSize({ width: 1180, height: 820 }); await page.waitForTimeout(800);
+  d = await diag(page);
+  check('viewport height change keeps orientation and corners', d.orientation === 'landscape' && JSON.stringify(d.corners) === JSON.stringify(before));
+
+  // التقرير المصدّر بلا معرفات
+  await page.click('#btnDiag');
+  await page.click('#btnReport'); await page.waitForTimeout(300);
+  const rep = await page.evaluate(() => document.getElementById('reportOut').value);
+  check('exported report has no deviceId/groupId', rep.length > 100 && !/deviceId|groupId/.test(rep));
+  await page.click('#btnDiag');
+
   await page.click('#btnRotate');
   await page.waitForTimeout(300);
   d = await diag(page);
@@ -41,6 +79,8 @@ try {
   await page.click('#btnSave');
   const saved = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('osmo.cal')));
   check('calibration saved for landscape', saved.length === 1 && saved[0].endsWith('.landscape'), saved.join());
+  const rawId = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).cameraId, saved[0]);
+  check('saved calibration does not store raw camera id', rawId === undefined);
   await page.click('#btnDiag');
   await page.waitForTimeout(1200);
   await page.screenshot({ path: out + 'landscape.png', fullPage: true });
@@ -65,6 +105,11 @@ try {
   await page.reload();
   check('app shell loads offline (Chromium)', (await page.title()).includes('مغامرة'));
   await ctx.setOffline(false);
+  // تحديث الإصدار = استبدال مخزن الملفات فقط؛ المعايرة والإحصاءات في localStorage تبقى
+  const kept = await page.evaluate(async () => { for (const k of await caches.keys()) await caches.delete(k); const r = await navigator.serviceWorker.getRegistration(); await r?.unregister(); return Object.keys(localStorage).filter((k) => k.startsWith('osmo.')).length; });
+  await page.reload(); await page.waitForTimeout(500);
+  const after = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('osmo.')).length);
+  check('update (cache cleared + SW re-registered) keeps calibration/stats', kept > 0 && after === kept, `${kept} → ${after}`);
 
   check('no uncaught page errors', errors.length === 0, errors.join(' | '));
 } finally {

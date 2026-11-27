@@ -24,6 +24,8 @@ jobs:
           node-version: 22
       - name: فحص المستودع (لا صور شخصية ولا أسرار)
         run: node tools/check-repo.js
+      - name: أداة رسم المشاهد الاصطناعية لاختبارات التعرف (sharp)
+        run: npm install --no-save --no-package-lock sharp@0.34
       - name: اختبارات الوحدات
         run: npm test
       - name: تجهيز ملفات النشر وختم الإصدار

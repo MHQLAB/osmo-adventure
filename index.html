@@ -64,11 +64,43 @@
       </div>
     </section>
 
+    <section class="panel" id="panelRecog">
+      <h2>٤. التعرف على القطع (تجريبي)</h2>
+      <p class="muted small">ضع القطع وانتظر ثبات الصورة. ما يراه النظام يظهر هنا مباشرة. البرنامج يُقبل بعد قراءتين متطابقتين.</p>
+      <canvas id="recogCanvas"></canvas>
+      <p id="recogStatus" class="small"></p>
+      <p id="recogProgram" class="program"></p>
+      <ul id="recogList" class="checks small"></ul>
+      <div class="row">
+        <input id="expectedInput" type="text" placeholder="المتوقع: مشي أعلى ٣، قفز يمين" aria-label="البرنامج المتوقع">
+        <button id="btnCompare" class="tool">قارن بالمتوقع</button>
+        <button id="btnResetStats" class="ghost">تصفير الإحصاء</button>
+      </div>
+      <p id="recogStats" class="muted small"></p>
+      <div class="row small">
+        <span>تعليم الأرقام (قطعة رقم واحدة فقط على الطاولة):</span>
+        <button class="tool teach" data-digit="2">٢</button><button class="tool teach" data-digit="3">٣</button>
+        <button class="tool teach" data-digit="4">٤</button><button class="tool teach" data-digit="5">٥</button>
+        <button id="btnForgetDigits" class="ghost">مسح المتعلَّم</button>
+      </div>
+      <div class="row">
+        <button id="btnRun" class="primary" disabled>▶ نفّذ على الروبوت</button>
+      </div>
+      <canvas id="robotCanvas" width="420" height="300"></canvas>
+    </section>
+
     <section class="panel" id="panelDiag" hidden>
       <h2>التشخيص</h2>
+      <div class="triple">
+        <figure><canvas id="rawCanvas"></canvas><figcaption>الخام</figcaption></figure>
+        <figure><canvas id="corrMini"></canvas><figcaption>بعد التصحيح</figcaption></figure>
+        <figure><canvas id="cropMini"></canvas><figcaption>منطقة اللعب</figcaption></figure>
+      </div>
       <dl id="diag" class="diag mono"></dl>
       <div class="row">
         <button id="btnReport" class="tool">نسخ تقرير الاختبار</button>
+        <button id="btnZoomSweep" class="tool" disabled>اختبار التقريب 1–2×</button>
+        <button id="btnSnapshotRaw" class="tool">حفظ لقطة خام (بإذن)</button>
         <button id="btnZoom" class="tool" disabled>تقريب تلقائي (تجريبي)</button>
         <button id="btnWb" class="tool" disabled>قفل توازن الأبيض (تجريبي)</button>
         <button id="btnSnapshot" class="tool">حفظ لقطة (بإذن)</button>
@@ -83,7 +115,7 @@
 
   <dialog id="consent">
     <form method="dialog">
-      <p>سيتم حفظ صورة واحدة لمنطقة اللعب على هذا الجهاز فقط لاستخدامها في تطوير التعرف على القطع. لا تُرسل إلى أي مكان. هل توافق؟</p>
+      <p id="consentText">سيتم حفظ صورة واحدة على هذا الجهاز فقط لاستخدامها في تطوير التعرف على القطع. لا تُرسل إلى أي مكان. هل توافق؟</p>
       <div class="row">
         <button value="yes" class="primary">موافق</button>
         <button value="no" class="ghost">إلغاء</button>

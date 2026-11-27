@@ -6,7 +6,8 @@ const CACHE = 'osmo-adventure-' + VERSION;
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './src/app.js', './src/vision/geometry.js', './src/vision/rectify.js', './src/vision/quality.js',
-  './src/vision/adaptive.js', './src/vision/autoorient.js', './src/vision/illuminant.js', './src/vision/motion.js', './src/vision/roi.js', './src/calibration/store.js', './src/platform/storage.js', './src/content/pieces.js', './src/platform/orientation.js', './src/platform/camera.js',
+  './src/vision/adaptive.js', './src/vision/autoorient.js', './src/vision/illuminant.js', './src/vision/motion.js', './src/vision/roi.js', './src/calibration/store.js', './src/platform/storage.js', './src/platform/framehealth.js', './src/platform/privacy.js', './src/content/pieces.js',
+  './src/recognition/pixels.js', './src/recognition/components.js', './src/recognition/arrow.js', './src/recognition/digits.js', './src/recognition/digit-templates.js', './src/recognition/digit-templates-real.js', './src/recognition/recognize.js', './src/recognition/program.js', './src/engine/robot.js', './src/platform/orientation.js', './src/platform/camera.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
 ];
 

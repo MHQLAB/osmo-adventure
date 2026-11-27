@@ -23,6 +23,18 @@ export function cellMeans(rgba, w, h, cols, rows) {
   return out;
 }
 
+/**
+ * نسبة الخلايا المعتمة على كل حافة. مع العاكس تكون جهة القاعدة/الآيباد هي الأكثر عتمة غالبًا (دليل مساعد على الاتجاه، لا حاسم).
+ */
+export function darkSides(m, cols, rows, depth = 2) {
+  const frac = (cells) => cells.filter((c) => m[c * 4 + 3] < 40).length / cells.length;
+  const band = (fn) => { const out = []; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (fn(x, y)) out.push(y * cols + x); return out; };
+  return {
+    top: +frac(band((x, y) => y < depth)).toFixed(2), bottom: +frac(band((x, y) => y >= rows - depth)).toFixed(2),
+    left: +frac(band((x) => x < depth)).toFixed(2), right: +frac(band((x) => x >= cols - depth)).toFixed(2),
+  };
+}
+
 const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; };
 
 /** أكبر مستطيل من القيم 1 في مصفوفة ثنائية (خوارزمية المدرج التكراري). */
@@ -98,7 +110,13 @@ export function autoPlayArea(rgba, w, h, { cols = 32, rows = 18, chromaTol = 0.0
     if (Math.abs(r - ref[0]) <= chromaTol && Math.abs(g - ref[1]) <= chromaTol && L >= ref[2] * lumaLo && L <= ref[2] * lumaHi) { mask[c] = 1; tableCells++; }
   }
   fillHoles(mask, cols, rows, maxHole);
-  const rect = largestRectangle(mask, cols, rows, [cols >> 1, rows >> 1]);
+  // الأفضل: مستطيل يحتوي الوسط. احتياطيًا (قطعة أو يد في الوسط): أكبر مستطيل أينما كان إن كان كبيرًا بما يكفي
+  let rect = largestRectangle(mask, cols, rows, [cols >> 1, rows >> 1]);
+  let fallback = false;
+  if (!rect || rect.area < cols * rows * 0.12) {
+    const any = largestRectangle(mask, cols, rows);
+    if (any && any.area >= cols * rows * 0.15) { rect = any; fallback = true; }
+  }
   if (!rect) return null;
   // هامش نصف خلية للداخل
   const x0 = (rect.x0 + 0.5) / cols, x1 = (rect.x1 + 0.5) / cols, y0 = (rect.y0 + 0.5) / rows, y1 = (rect.y1 + 0.5) / rows;
@@ -107,7 +125,7 @@ export function autoPlayArea(rgba, w, h, { cols = 32, rows = 18, chromaTol = 0.0
   const confidence = Math.max(0, Math.min(1, (areaFrac - 0.1) / 0.4)) * (tableCells < cols * rows * 0.97 ? 1 : 0.6);
   return {
     corners: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
-    confidence, tableFraction: tableCells / (cols * rows), areaFraction: areaFrac,
-    reference: ref, mask, cols, rows,
+    confidence: fallback ? confidence * 0.7 : confidence, fallback, tableFraction: tableCells / (cols * rows), areaFraction: areaFrac,
+    reference: ref, mask, cols, rows, darkSides: darkSides(m, cols, rows),
   };
 }

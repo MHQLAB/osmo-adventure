@@ -37,14 +37,41 @@ export class CellMotion {
       }
     }
     let changed = 0, considered = 0, maxDiff = 0;
+    const flags = new Uint8Array(cols * rows);
     for (let cy = m; cy < rows - m; cy++) for (let cx = m; cx < cols - m; cx++) {
       const c = cy * cols + cx; const d = counts[c] ? sums[c] / counts[c] : 0;
       sums[c] = d; considered++;
       if (d > maxDiff) maxDiff = d;
-      if (d > this.cellThreshold) changed++;
+      if (d > this.cellThreshold) { changed++; flags[c] = 1; }
     }
     this.prev = luma.slice();
     const fraction = considered ? changed / considered : 0;
-    return { changed, fraction, global: fraction >= this.globalFraction, maxDiff, offset, cells: sums };
+    return { changed, fraction, global: fraction >= this.globalFraction, maxDiff, offset, cells: sums, flags };
   }
+}
+
+/**
+ * خلايا متذبذبة باستمرار (انعكاس الشاشة في المرآة، وميض إضاءة) بينما بقية المنطقة ساكنة.
+ * تُستبعد من قرار الثبات بعد ملاحظتها مدة كافية، وتُعرض في التشخيص. يد تدخل وتخرج لا تُستبعد لأنها لا تستمر.
+ */
+export class FlickerMask {
+  constructor({ cells, window = 45, ratio = 0.6, maxMasked = 0.15 } = {}) {
+    this.cells = cells; this.window = window; this.ratio = ratio; this.maxMasked = maxMasked;
+    this.hist = []; this.mask = new Uint8Array(cells);
+  }
+  reset() { this.hist = []; this.mask.fill(0); }
+  /** changedFlags: Uint8Array لكل خلية (1 = تغيرت في هذا الإطار). يعيد عدد الخلايا المتغيرة بعد الاستبعاد. */
+  update(changedFlags) {
+    this.hist.push(changedFlags); if (this.hist.length > this.window) this.hist.shift();
+    if (this.hist.length >= this.window) {
+      const counts = new Uint16Array(this.cells);
+      for (const f of this.hist) for (let i = 0; i < this.cells; i++) counts[i] += f[i];
+      const cand = []; for (let i = 0; i < this.cells; i++) if (counts[i] >= this.ratio * this.window) cand.push(i);
+      // إن تغيرت مساحة كبيرة باستمرار فهي حركة حقيقية/مشكلة عامة لا وميض موضعي
+      this.mask.fill(0); if (cand.length <= this.maxMasked * this.cells) for (const i of cand) this.mask[i] = 1;
+    }
+    let changed = 0; for (let i = 0; i < this.cells; i++) if (changedFlags[i] && !this.mask[i]) changed++;
+    return changed;
+  }
+  get maskedCount() { let n = 0; for (const v of this.mask) n += v; return n; }
 }

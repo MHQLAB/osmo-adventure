@@ -30,7 +30,14 @@ test('service worker caches relative paths only and app registers it relatively'
 test('every module the app imports is cached for offline', () => {
   const sw = read('sw.js');
   for (const f of ['src/app.js', 'src/vision/geometry.js', 'src/vision/rectify.js', 'src/vision/quality.js', 'src/vision/adaptive.js', 'src/vision/autoorient.js', 'src/vision/illuminant.js', 'src/vision/motion.js', 'src/vision/roi.js',
-    'src/calibration/store.js', 'src/platform/orientation.js', 'src/platform/camera.js', 'src/platform/storage.js']) {
+    'src/calibration/store.js', 'src/platform/orientation.js', 'src/platform/camera.js', 'src/platform/storage.js', 'src/platform/framehealth.js', 'src/platform/privacy.js', 'src/recognition/pixels.js', 'src/recognition/components.js', 'src/recognition/arrow.js', 'src/recognition/digits.js', 'src/recognition/digit-templates.js', 'src/recognition/digit-templates-real.js', 'src/recognition/recognize.js', 'src/recognition/program.js', 'src/engine/robot.js', 'src/content/pieces.js']) {
     assert.ok(sw.includes(`'./${f}'`), f);
   }
+});
+
+test('every src module is listed in the service worker (auto-discovered)', async () => {
+  const { readdirSync, statSync } = await import('node:fs');
+  const walk = (d) => readdirSync(new URL('../' + d, import.meta.url)).flatMap((f) => statSync(new URL('../' + d + '/' + f, import.meta.url)).isDirectory() ? walk(d + '/' + f) : [d + '/' + f]);
+  const sw = read('sw.js');
+  for (const f of walk('src').filter((f) => f.endsWith('.js'))) assert.ok(sw.includes(`'./${f}'`), `missing in sw.js: ${f}`);
 });
